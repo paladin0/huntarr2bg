@@ -30,6 +30,7 @@ type Server struct {
 	arr          *arr.Service
 	activity     *activity.Service
 	scheduler    *scheduler.Scheduler
+	mediaHunt    *mediaHuntService
 	assetVersion string
 	server       *http.Server
 }
@@ -68,6 +69,7 @@ func New(cfg *config.Config, db *sql.DB, commit string) (*Server, error) {
 		arr:          arrSvc,
 		activity:     activitySvc,
 		scheduler:    sched,
+		mediaHunt:    newMediaHuntService(),
 		assetVersion: commit,
 		server: &http.Server{
 			Addr:              fmt.Sprintf(":%d", cfg.Port),
@@ -80,6 +82,8 @@ func New(cfg *config.Config, db *sql.DB, commit string) (*Server, error) {
 	}
 
 	s.registerRoutes(mux, apiRouter)
+	s.registerCatalogueRoutes(mux)
+	s.mediaHunt.register(mux)
 	return s, nil
 }
 
@@ -90,6 +94,7 @@ func (s *Server) Run() error {
 
 	schedCtx, schedCancel := context.WithCancel(ctx)
 	schedDone := make(chan struct{})
+	go s.mediaHunt.run(schedCtx)
 	go func() {
 		defer close(schedDone)
 		if err := s.scheduler.Run(schedCtx); err != nil && !errors.Is(err, context.Canceled) {

@@ -53,7 +53,7 @@ func newMediaHuntService() *mediaHuntService {
 	return s
 }
 func huntEnvInt(name string, def, min, max int) int {
-	v, err := strconv.Atoi(os.Getenv(name))
+	v, err := strconv.Atoi(catalogueSetting(name))
 	if err != nil {
 		return def
 	}
@@ -201,10 +201,10 @@ func dispatchHunt(ctx context.Context, item mediaHuntRequest) error {
 	if item.Kind == "game" {
 		p := fmt.Sprintf("/api/v3/games/%d/search-now", item.GameID)
 		dispatch := "false"
-		if os.Getenv("MEDIA_HUNT_GAME_AUTO_DISPATCH") == "true" {
+		if catalogueSetting("MEDIA_HUNT_GAME_AUTO_DISPATCH") == "true" {
 			dispatch = "true"
 		}
-		return huntAPI(ctx, os.Getenv("CATALOGUE_RETROARR_URL"), os.Getenv("CATALOGUE_RETROARR_KEY"), http.MethodPost, p, url.Values{"autoDispatch": {dispatch}})
+		return huntAPI(ctx, catalogueSetting("CATALOGUE_RETROARR_URL"), catalogueSetting("CATALOGUE_RETROARR_KEY"), http.MethodPost, p, url.Values{"autoDispatch": {dispatch}})
 	}
 	// LazyLibrarian queues both formats independently at approval time. Search
 	// requests use its native bulk scheduler, once per cycle rather than per book.
@@ -262,11 +262,11 @@ func (s *mediaHuntService) cycle(ctx context.Context) int {
 	if books {
 		// Global forceBookSearch is intentionally invoked once for the batch, not
 		// per title, to avoid multiplying identical searches across thousands of books.
-		params := url.Values{"cmd": {"forceBookSearch"}, "apikey": {os.Getenv("CATALOGUE_LAZYLIBRARIAN_KEY")}}
+		params := url.Values{"cmd": {"forceBookSearch"}, "apikey": {catalogueSetting("CATALOGUE_LAZYLIBRARIAN_KEY")}}
 		var err error
 		for _, format := range []string{"eBook", "AudioBook"} {
 			params.Set("type", format)
-			if e := huntAPI(ctx, os.Getenv("CATALOGUE_LAZYLIBRARIAN_URL"), os.Getenv("CATALOGUE_LAZYLIBRARIAN_KEY"), http.MethodGet, "/api", params); e != nil {
+			if e := huntAPI(ctx, catalogueSetting("CATALOGUE_LAZYLIBRARIAN_URL"), catalogueSetting("CATALOGUE_LAZYLIBRARIAN_KEY"), http.MethodGet, "/api", params); e != nil {
 				err = e
 			}
 		}
@@ -286,17 +286,20 @@ func (s *mediaHuntService) cycle(ctx context.Context) int {
 	return processed
 }
 func (s *mediaHuntService) run(ctx context.Context) {
-	if os.Getenv("MEDIA_HUNT_ENABLED") != "true" {
-		return
-	}
-	ticker := time.NewTicker(time.Duration(huntEnvInt("MEDIA_HUNT_INTERVAL_MINUTES", 60, 15, 1440)) * time.Minute)
+	// Keep the scheduler alive while disabled so changes made in the web UI
+	// take effect without recreating the container.
+	ticker := time.NewTicker(time.Minute)
+	lastRun := time.Now()
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.cycle(ctx)
+			if catalogueSetting("MEDIA_HUNT_ENABLED") == "true" && time.Since(lastRun) >= time.Duration(huntEnvInt("MEDIA_HUNT_INTERVAL_MINUTES", 60, 15, 1440))*time.Minute {
+				s.cycle(ctx)
+				lastRun = time.Now()
+			}
 		}
 	}
 }

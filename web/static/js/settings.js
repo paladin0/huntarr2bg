@@ -333,3 +333,51 @@ function settingsManager() {
         },
     };
 }
+
+// Extra integration settings, persisted in /config/catalogue-settings.json.
+(function () {
+    const groups = [
+        ['LazyLibrarian (eBooks & Audiobooks)', 'CATALOGUE_LAZYLIBRARIAN_URL', 'CATALOGUE_LAZYLIBRARIAN_KEY'],
+        ['RetroArr (Games)', 'CATALOGUE_RETROARR_URL', 'CATALOGUE_RETROARR_KEY'],
+        ['Automation', 'MEDIA_HUNT_ENABLED', 'MEDIA_HUNT_INTERVAL_MINUTES', 'MEDIA_HUNT_BATCH', 'MEDIA_HUNT_RETRY_MINUTES', 'MEDIA_HUNT_RESCAN_HOURS', 'MEDIA_HUNT_GAME_AUTO_DISPATCH'],
+    ];
+    async function start() {
+        const root = document.querySelector('[x-data="settingsManager()"]');
+        if (!root) return;
+        const panel = document.createElement('section');
+        panel.className = 'rounded-lg border border-brand-700 bg-brand-800 p-6 space-y-5';
+        panel.innerHTML = '<h2 class="text-xl font-bold">Books, Audiobooks &amp; Games</h2><p class="text-sm text-gray-300">Stored in the Huntarr configuration volume. Secrets are never displayed; leave a secret blank to retain it. Automation is opt-in.</p><form id="bg-form" class="grid gap-4 sm:grid-cols-2"></form><div id="bg-message" role="status"></div>';
+        root.append(panel);
+        const form = panel.querySelector('form');
+        const response = await fetch('/api/catalogue/settings');
+        if (!response.ok) {panel.querySelector('#bg-message').textContent='Could not load integration settings';return;}
+        const {fields} = await response.json();
+        for (const [title,...names] of groups) {
+            const heading=document.createElement('h3');heading.className='text-lg font-semibold sm:col-span-2 mt-3';heading.textContent=title;form.append(heading);
+            for (const name of names) {
+                const field=fields[name];if(!field)continue;
+                const label=document.createElement('label');label.className='block text-sm text-gray-300';
+                const caption=document.createElement('span');caption.textContent=name.replace(/^(CATALOGUE_|MEDIA_HUNT_)/,'').replaceAll('_',' ');caption.className='block mb-2';label.append(caption);
+                const input=document.createElement('input');input.name=name;input.dataset.kind=field.type;
+                input.className='w-full rounded-md border border-brand-600 bg-brand-700 px-3 py-2 text-white';
+                if (field.type==='bool'){input.type='checkbox';input.checked=field.value==='true';}
+                else {input.type=field.type==='secret'?'password':field.type==='int'?'number':field.type==='url'?'url':'text';input.value=field.value;
+                    if(field.type==='secret')input.placeholder=field.configured?'Saved (leave blank to keep)':'Enter API key';}
+                label.append(input);form.append(label);
+            }
+        }
+        const button=document.createElement('button');button.type='submit';button.textContent='Save integrations';button.className='rounded-md bg-accent-600 px-4 py-2 text-white sm:col-span-2';form.append(button);
+        form.addEventListener('submit',async event=>{
+            event.preventDefault();const settings={};
+            for(const field of form.querySelectorAll('[name]')) {
+                if(field.dataset.kind==='secret'&&!field.value.trim())continue;
+                settings[field.name]=field.dataset.kind==='bool'?String(field.checked):field.value;
+            }
+            const msg=panel.querySelector('#bg-message');
+            try {const r=await fetch('/api/catalogue/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings})});
+                if(!r.ok)throw new Error((await r.text()).slice(0,100));msg.textContent='Settings saved';}
+            catch(e){msg.textContent='Save failed: '+e.message;}
+        });
+    }
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+})();

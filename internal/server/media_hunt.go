@@ -119,7 +119,7 @@ func (s *mediaHuntService) enqueue(r mediaHuntRequest) (bool, error) {
 	return true, nil
 }
 func huntAuth(r *http.Request) bool {
-	expected := os.Getenv("MEDIA_HUNT_TOKEN")
+	expected := catalogueSetting("MEDIA_HUNT_TOKEN")
 	supplied := r.Header.Get("X-Media-Hunt-Token")
 	return expected != "" && len(expected) == len(supplied) && subtle.ConstantTimeCompare([]byte(expected), []byte(supplied)) == 1
 }

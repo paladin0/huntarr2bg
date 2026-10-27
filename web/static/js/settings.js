@@ -339,6 +339,7 @@ function settingsManager() {
     const groups = [
         ['LazyLibrarian (eBooks & Audiobooks)', 'CATALOGUE_LAZYLIBRARIAN_URL', 'CATALOGUE_LAZYLIBRARIAN_KEY'],
         ['RetroArr (Games)', 'CATALOGUE_RETROARR_URL', 'CATALOGUE_RETROARR_KEY'],
+        ['Request authentication', 'MEDIA_HUNT_TOKEN'],
         ['Automation', 'MEDIA_HUNT_ENABLED', 'MEDIA_HUNT_INTERVAL_MINUTES', 'MEDIA_HUNT_BATCH', 'MEDIA_HUNT_RETRY_MINUTES', 'MEDIA_HUNT_RESCAN_HOURS', 'MEDIA_HUNT_GAME_AUTO_DISPATCH'],
     ];
     async function start() {
